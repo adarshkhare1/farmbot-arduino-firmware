@@ -29,6 +29,12 @@ int GCodeProcessor::execute(Command *command)
   int execution = 0;
   bool isMovement = false;
 
+  bool emergencyStop = false;
+  emergencyStop = CurrentState::getInstance()->isEmergencyStop();
+
+  bool movementAbort = false;
+  movementAbort = CurrentState::getInstance()->isMovementAbort();
+
   int attempt = 0;
   int maximumAttempts = ParameterList::getInstance()->getValue(PARAM_MOV_NR_RETRY);
 
@@ -54,7 +60,7 @@ int GCodeProcessor::execute(Command *command)
 
   //Only allow reset of emergency stop when emergency stop is engaged
 
-  if (CurrentState::getInstance()->isEmergencyStop()) 
+  if (emergencyStop)
   {
     if (!(
       command->getCodeEnum() == F09 ||
@@ -72,29 +78,19 @@ int GCodeProcessor::execute(Command *command)
     }
   }
 
-  // Tim 2017-04-15 Disable until the raspberry code is ready
-  /*
   // Do not execute the command when the config complete parameter is not
   // set by the raspberry pi and it's asked to do a move command
 
-	if (ParameterList::getInstance()->getValue(PARAM_CONFIG_OK) != 1) 
+  if (ParameterList::getInstance()->getValue(PARAM_CONFIG_OK) != 1)
   {
-		if (	command->getCodeEnum() == G00 ||
-			command->getCodeEnum() == G01 ||
-			command->getCodeEnum() == F11 ||
-			command->getCodeEnum() == F12 ||
-			command->getCodeEnum() == F13 ||
-			command->getCodeEnum() == F14 ||
-			command->getCodeEnum() == F15 ||
-			command->getCodeEnum() == F16 ) 
+    if (isMovement)
     {
-
-        		Serial.print(COMM_REPORT_NO_CONFIG);
-			CurrentState::getInstance()->printQAndNewLine();
-			return -1;
-		}
+      Serial.print(COMM_REPORT_NO_CONFIG);
+      CurrentState::getInstance()->printQAndNewLine();
+      CurrentState::getInstance()->setLastError(ERR_PARAMS_NOT_OK);
+      return -1;
+    }
   }
-	*/
 
   // Return error when no command or invalid command is found
 
@@ -103,6 +99,7 @@ int GCodeProcessor::execute(Command *command)
 
     Serial.print(COMM_REPORT_BAD_CMD);
     CurrentState::getInstance()->printQAndNewLine();
+    CurrentState::getInstance()->setLastError(ERR_INVALID_COMMAND);
 
     if (LOGGING)
     {
@@ -115,6 +112,7 @@ int GCodeProcessor::execute(Command *command)
   {
     Serial.print(COMM_REPORT_BAD_CMD);
     CurrentState::getInstance()->printQAndNewLine();
+    CurrentState::getInstance()->setLastError(ERR_INVALID_COMMAND);
 
     if (LOGGING)
     {
@@ -131,6 +129,7 @@ int GCodeProcessor::execute(Command *command)
   {
     Serial.print(COMM_REPORT_BAD_CMD);
     CurrentState::getInstance()->printQAndNewLine();
+    CurrentState::getInstance()->setLastError(ERR_INVALID_COMMAND);
 
     Serial.println("R99 handler == NULL\r\n");
     return -1;
@@ -143,7 +142,8 @@ int GCodeProcessor::execute(Command *command)
 
   // Execute command with retry
   CurrentState::getInstance()->setLastError(0);
-  while (attempt < 1 || (attempt < maximumAttempts && execution != 0))
+  while (attempt < 1 || (!emergencyStop && !movementAbort && attempt < maximumAttempts && execution != 0 && execution != 2))
+  // error 2 is timeout error: stop movement retries
   {
 
     if (LOGGING || debugMessages)
@@ -164,6 +164,8 @@ int GCodeProcessor::execute(Command *command)
     
     handler->execute(command);
     execution = CurrentState::getInstance()->getLastError();
+    emergencyStop = CurrentState::getInstance()->isEmergencyStop();
+    movementAbort = CurrentState::getInstance()->isMovementAbort();
 
     if (LOGGING || debugMessages)
     {
@@ -203,6 +205,8 @@ int GCodeProcessor::execute(Command *command)
   else
   {
     Serial.print(COMM_REPORT_CMD_ERROR);
+    Serial.print(" V");
+    Serial.print(CurrentState::getInstance()->getLastError());
     CurrentState::getInstance()->printQAndNewLine();
   }
 

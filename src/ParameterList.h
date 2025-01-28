@@ -7,7 +7,7 @@
 #include "CurrentState.h"
 
 //#define NULL 0
-const int PARAM_NR_OF_PARAMS = 225;
+const int PARAM_NR_OF_PARAMS = 230;
 
 enum ParamListEnum
 {
@@ -51,6 +51,7 @@ enum ParamListEnum
   MOVEMENT_STEPS_ACC_DEC_X = 41,
   MOVEMENT_STEPS_ACC_DEC_Y = 42,
   MOVEMENT_STEPS_ACC_DEC_Z = 43,
+  MOVEMENT_STEPS_ACC_DEC_Z2 = 44,
 
   MOVEMENT_STOP_AT_HOME_X = 45,
   MOVEMENT_STOP_AT_HOME_Y = 46,
@@ -67,6 +68,7 @@ enum ParamListEnum
   MOVEMENT_MIN_SPD_X = 61,
   MOVEMENT_MIN_SPD_Y = 62,
   MOVEMENT_MIN_SPD_Z = 63,
+  MOVEMENT_MIN_SPD_Z2 = 64,
 
   MOVEMENT_HOME_SPEED_X = 65,
   MOVEMENT_HOME_SPEED_Y = 66,
@@ -75,6 +77,27 @@ enum ParamListEnum
   MOVEMENT_MAX_SPD_X = 71,
   MOVEMENT_MAX_SPD_Y = 72,
   MOVEMENT_MAX_SPD_Z = 73,
+  MOVEMENT_MAX_SPD_Z2 = 74,
+
+  // switch the end contacts from NO to NC
+  MOVEMENT_INVERT_2_ENDPOINTS_X = 75,
+  MOVEMENT_INVERT_2_ENDPOINTS_Y = 76,
+  MOVEMENT_INVERT_2_ENDPOINTS_Z = 77,
+
+  // motor current (used with TMC2130)
+  MOVEMENT_MOTOR_CURRENT_X = 81,
+  MOVEMENT_MOTOR_CURRENT_Y = 82,
+  MOVEMENT_MOTOR_CURRENT_Z = 83,
+
+  // stall sensitivity (used with TMC2130)
+  MOVEMENT_STALL_SENSITIVITY_X = 85,
+  MOVEMENT_STALL_SENSITIVITY_Y = 86,
+  MOVEMENT_STALL_SENSITIVITY_Z = 87,
+
+  // microstepping (used with TMC2130)
+  MOVEMENT_MICROSTEPS_X = 91,
+  MOVEMENT_MICROSTEPS_Y = 92,
+  MOVEMENT_MICROSTEPS_Z = 93,
 
   // encoder settings
   ENCODER_ENABLED_X = 101,
@@ -105,15 +128,43 @@ enum ParamListEnum
   ENCODER_INVERT_Y = 132,
   ENCODER_INVERT_Z = 133,
 
-  // sizes of axis
+  // sizes of axis, lower byte and higher byte
   MOVEMENT_AXIS_NR_STEPS_X = 141,
   MOVEMENT_AXIS_NR_STEPS_Y = 142,
   MOVEMENT_AXIS_NR_STEPS_Z = 143,
+
+  MOVEMENT_AXIS_NR_STEPS_H_X = 151,
+  MOVEMENT_AXIS_NR_STEPS_H_Y = 152,
+  MOVEMENT_AXIS_NR_STEPS_H_Z = 153,
 
   // stop at end of axis
   MOVEMENT_STOP_AT_MAX_X = 145,
   MOVEMENT_STOP_AT_MAX_Y = 146,
   MOVEMENT_STOP_AT_MAX_Z = 147,
+
+  // retry for the calibration
+  MOVEMENT_CALIBRATION_RETRY_X = 161,
+  MOVEMENT_CALIBRATION_RETRY_Y = 162,
+  MOVEMENT_CALIBRATION_RETRY_Z = 163,
+
+  // use stealth setting or TMC2130
+  MOVEMENT_AXIS_STEALTH_X = 165,
+  MOVEMENT_AXIS_STEALTH_Y = 166,
+  MOVEMENT_AXIS_STEALTH_Z = 167,
+
+  // deadzone for the retry for the calibration for one try
+  MOVEMENT_CALIBRATION_DEADZONE_X = 171,
+  MOVEMENT_CALIBRATION_DEADZONE_Y = 172,
+  MOVEMENT_CALIBRATION_DEADZONE_Z = 173,
+
+  // retry for the calibration in total
+  MOVEMENT_CALIBRATION_RETRY_TOTAL_X = 175,
+  MOVEMENT_CALIBRATION_RETRY_TOTAL_Y = 176,
+  MOVEMENT_CALIBRATION_RETRY_TOTAL_Z = 177,
+
+  // pin monitoring
+  PIN_REPORT_1_PIN_NR = 198,
+  PIN_REPORT_2_PIN_NR = 199,
 
   // pin guard settings
   PIN_GUARD_1_PIN_NR = 201,
@@ -135,7 +186,6 @@ enum ParamListEnum
   PIN_GUARD_5_PIN_NR = 221,
   PIN_GUARD_5_TIME_OUT = 222,
   PIN_GUARD_5_ACTIVE_STATE = 223
-
 };
 
 /*
@@ -148,9 +198,9 @@ class ParameterList
 
 public:
   static ParameterList *getInstance();
-  int writeValue(int id, int value);
+  int writeValue(int id, long value);
   int readValue(int id);
-  int getValue(int id);
+  long getValue(int id);
 
   bool validParam(int id);
   void loadDefaultValue(int id);
@@ -160,12 +210,13 @@ public:
   int writeAllValuesToEeprom();
   int setAllValuesToDefault();
 
-  int readValueEeprom(int id);
-  int writeValueEeprom(int id, int value);
+  long readValueEeprom(int id);
+  int writeValueEeprom(int id, long value);
 
   void sendConfigToModules();
 
   int paramChangeNumber();
+  int tmcParamChangeNumber();
 
 private:
   ParameterList();
@@ -173,6 +224,7 @@ private:
   void operator=(ParameterList const &);
 
   int paramChangeNr;
+  int tmcParamChangeNr;
 };
 
 #endif /* PARAMETERLIST_H_ */

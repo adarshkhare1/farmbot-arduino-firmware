@@ -29,13 +29,13 @@ int F15Handler::execute(Command *command)
 
   if (LOGGING)
   {
-    Serial.print("R99 HOME Z\r\n");
+    Serial.print("R99 CALIBRATE Y\r\n");
   }
 
-  ret = StepperControl::getInstance()->calibrateAxis(1);
+  ret = Movement::getInstance()->calibrateAxis(1);
 
   if (ret == 0) {
-    StepperControl::getInstance()->moveToCoords(0, 0, 0, 0, 0, 0, false, true, false);
+    Movement::getInstance()->moveToCoords(0, 0, 0, 0, 0, 0, false, true, false);
   }
 
   if (LOGGING)

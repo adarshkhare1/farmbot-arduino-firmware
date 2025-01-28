@@ -3,6 +3,7 @@
 *.lo
 *.o
 *.obj
+*.d
 
 # Compiled Dynamic libraries
 *.so
@@ -28,7 +29,18 @@
 # Visual Studio files
 /.vs
 /src/Debug
+/src/Release
 /src/__vm
 
 # Setting files
 Debug.h
+/__vm
+.vscode
+
+# Build artifacts
+_build
+bin
+src.ino.cpp
+src.ino.mega.hex
+src.ino.with_bootloader.mega.hex
+src/CommitSHA.h

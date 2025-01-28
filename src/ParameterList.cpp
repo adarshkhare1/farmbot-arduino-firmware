@@ -2,7 +2,7 @@
 #include <EEPROM.h>
 
 static ParameterList *instanceParam;
-int paramValues[PARAM_NR_OF_PARAMS];
+long paramValues[PARAM_NR_OF_PARAMS];
 
 ParameterList *ParameterList::getInstance()
 {
@@ -20,6 +20,7 @@ ParameterList::ParameterList()
   // unless the eeprom is disabled with a parameter
 
   int paramChangeNr = 0;
+  int tmcParamChangeNr = 0;
 
   int paramVersion = readValueEeprom(0);
   if (paramVersion <= 0)
@@ -29,11 +30,12 @@ ParameterList::ParameterList()
   }
   else
   {
-    //if (readValueEeprom(PARAM_USE_EEPROM) == 1) {
-    readAllValuesFromEeprom();
-    //} else {
-    //	setAllValuesToDefault();
-    //}
+    if (readValueEeprom(PARAM_USE_EEPROM) == 1)
+    {
+      readAllValuesFromEeprom();
+    } else {
+      setAllValuesToDefault();
+    }
   }
 }
 
@@ -46,9 +48,9 @@ int ParameterList::readValue(int id)
   if (validParam(id))
   {
     // Retrieve the value from memory
-    int value = paramValues[id];
+    long value = paramValues[id];
 
-    // Send to the raspberrt pi
+    // Send to the raspberry pi
     Serial.print("R21");
     Serial.print(" ");
     Serial.print("P");
@@ -67,7 +69,7 @@ int ParameterList::readValue(int id)
   return 0;
 }
 
-int ParameterList::writeValue(int id, int value)
+int ParameterList::writeValue(int id, long value)
 {
 
   if (paramChangeNr < 9999)
@@ -77,6 +79,31 @@ int ParameterList::writeValue(int id, int value)
   else
   {
     paramChangeNr = 0;
+  }
+
+  if (tmcParamChangeNr < 9999)
+  {
+    if (
+      id == 81 ||
+      id == 82 ||
+      id == 83 ||
+      id == 85 ||
+      id == 86 ||
+      id == 87 ||
+      id == 91 ||
+      id == 92 ||
+      id == 93 ||
+      id == 165 ||
+      id == 166 ||
+      id == 167
+    )
+    {
+      tmcParamChangeNr++;
+    }
+  }
+  else
+  {
+    tmcParamChangeNr = 0;
   }
 
   // Check if the value is a valid parameter
@@ -136,7 +163,7 @@ int ParameterList::readAllValues()
   }
 }
 
-int ParameterList::getValue(int id)
+long ParameterList::getValue(int id)
 {
   return paramValues[id];
 }
@@ -146,37 +173,75 @@ int ParameterList::paramChangeNumber()
   return paramChangeNr;
 }
 
+int ParameterList::tmcParamChangeNumber()
+{
+  return tmcParamChangeNr;
+}
+
 // ===== eeprom handling ====
 
-int ParameterList::readValueEeprom(int id)
+long ParameterList::readValueEeprom(int id)
 {
 
   // Assume all values are ints and calculate address for that
   int address = id * 2;
 
   //Read the 2 bytes from the eeprom memory.
-  long two = EEPROM.read(address);
-  long one = EEPROM.read(address + 1);
+  long one   = EEPROM.read(address + 0);
+  long two   = EEPROM.read(address + 1);
 
-  //Return the recomposed long by using bitshift.
-  return ((two << 0) & 0xFF) + ((one << 8) & 0xFFFF);
+  long three = 0;
+  long four  = 0;
+
+  // Process 2-byte or 4-byte EEPROM value
+  // Return -1 for negative values (1 in highest bit) to indicate value should be set to default.
+  if (id == 141 || id == 142 || id == 143)
+  {
+    // 4-byte EEPROM value
+    three = EEPROM.read(address + 20);
+    four = EEPROM.read(address + 21);
+    if ((three == 255 && four == 255) && !(one == 255 && two == 255))
+    {
+      // Value may have been recently increased to 4 bytes. Keep only the first two.
+      three = 0;
+      four = 0;
+      if (two > 127) { return -1; }
+    }
+    if (four > 127) { return -1; }
+  }
+  else
+  {
+    // 2-byte EEPROM value
+    if (two > 127) { return -1; }
+  }
+
+  // Return the recomposed long by using bitshift.
+  return ((one & 0xFFl) << 0) + ((two & 0xFFl) << 8) + ((three & 0xFFl) << 16) + ((four & 0xFFl) << 24);
 }
 
-int ParameterList::writeValueEeprom(int id, int value)
+int ParameterList::writeValueEeprom(int id, long value)
 {
 
   // Assume all values are ints and calculate address for that
   int address = id * 2;
 
   //Decomposition from a int to 2 bytes by using bitshift.
-  //One = Most significant -> Two = Least significant byte
-  byte two = (value & 0xFF);
-  byte one = ((value >> 8) & 0xFF);
+  //One = Least significant -> Four = Most significant byte
+  byte one = (value & 0xFF);
+  byte two = ((value >> 8) & 0xFF);
+  byte three = ((value >> 16) & 0xFF);
+  byte four = ((value >> 24) & 0xFF);
 
   //Write the 4 bytes into the eeprom memory.
-  EEPROM.write(address, two);
-  EEPROM.write(address + 1, one);
+  EEPROM.write(address + 0, one);
+  EEPROM.write(address + 1, two);
 
+  // Only this parameter needs a long value
+  if (id == 141 || id == 142 || id == 143)
+  {
+    EEPROM.write(address + 20, three);
+    EEPROM.write(address + 21, four);
+  }
   return 0;
 }
 
@@ -324,6 +389,9 @@ void ParameterList::loadDefaultValue(int id)
   case MOVEMENT_STEPS_ACC_DEC_Z:
     paramValues[id] = MOVEMENT_STEPS_ACC_DEC_Z_DEFAULT;
     break;
+  case MOVEMENT_STEPS_ACC_DEC_Z2:
+    paramValues[id] = MOVEMENT_STEPS_ACC_DEC_Z2_DEFAULT;
+    break;
 
   case MOVEMENT_STOP_AT_HOME_X:
     paramValues[id] = MOVEMENT_STOP_AT_HOME_X_DEFAULT;
@@ -364,6 +432,9 @@ void ParameterList::loadDefaultValue(int id)
   case MOVEMENT_MIN_SPD_Z:
     paramValues[id] = MOVEMENT_MIN_SPD_Z_DEFAULT;
     break;
+  case MOVEMENT_MIN_SPD_Z2:
+    paramValues[id] = MOVEMENT_MIN_SPD_Z2_DEFAULT;
+    break;
 
   case MOVEMENT_HOME_SPEED_X:
     paramValues[id] = MOVEMENT_HOME_SPEED_X_DEFAULT;
@@ -384,6 +455,19 @@ void ParameterList::loadDefaultValue(int id)
   case MOVEMENT_MAX_SPD_Z:
     paramValues[id] = MOVEMENT_MAX_SPD_Z_DEFAULT;
     break;
+  case MOVEMENT_MAX_SPD_Z2:
+    paramValues[id] = MOVEMENT_MAX_SPD_Z2_DEFAULT;
+    break;
+
+  case MOVEMENT_INVERT_2_ENDPOINTS_X:
+    paramValues[id] = MOVEMENT_INVERT_2_ENDPOINTS_X_DEFAULT;
+    break;
+  case MOVEMENT_INVERT_2_ENDPOINTS_Y:
+    paramValues[id] = MOVEMENT_INVERT_2_ENDPOINTS_Y_DEFAULT;
+    break;
+  case MOVEMENT_INVERT_2_ENDPOINTS_Z:
+    paramValues[id] = MOVEMENT_INVERT_2_ENDPOINTS_Z_DEFAULT;
+    break;
 
   case MOVEMENT_STOP_AT_MAX_X:
     paramValues[id] = MOVEMENT_STOP_AT_MAX_X_DEFAULT;
@@ -393,6 +477,76 @@ void ParameterList::loadDefaultValue(int id)
     break;
   case MOVEMENT_STOP_AT_MAX_Z:
     paramValues[id] = MOVEMENT_STOP_AT_MAX_Z_DEFAULT;
+    break;
+
+  case MOVEMENT_CALIBRATION_RETRY_X:
+    paramValues[id] = MOVEMENT_CALIBRATION_RETRY_X_DEFAULT;
+    break;
+  case MOVEMENT_CALIBRATION_RETRY_Y:
+    paramValues[id] = MOVEMENT_CALIBRATION_RETRY_Y_DEFAULT;
+    break;
+  case MOVEMENT_CALIBRATION_RETRY_Z:
+    paramValues[id] = MOVEMENT_CALIBRATION_RETRY_Z_DEFAULT;
+    break;
+
+  case MOVEMENT_CALIBRATION_RETRY_TOTAL_X:
+    paramValues[id] = MOVEMENT_CALIBRATION_RETRY_X_TOTAL_DEFAULT;
+    break;
+  case MOVEMENT_CALIBRATION_RETRY_TOTAL_Y:
+    paramValues[id] = MOVEMENT_CALIBRATION_RETRY_Y_TOTAL_DEFAULT;
+    break;
+  case MOVEMENT_CALIBRATION_RETRY_TOTAL_Z:
+    paramValues[id] = MOVEMENT_CALIBRATION_RETRY_Z_TOTAL_DEFAULT;
+    break;
+
+  case MOVEMENT_CALIBRATION_DEADZONE_X:
+    paramValues[id] = MOVEMENT_CALIBRATION_DEADZONE_X_DEFAULT;
+    break;
+  case MOVEMENT_CALIBRATION_DEADZONE_Y:
+    paramValues[id] = MOVEMENT_CALIBRATION_DEADZONE_Y_DEFAULT;
+    break;
+  case MOVEMENT_CALIBRATION_DEADZONE_Z:
+    paramValues[id] = MOVEMENT_CALIBRATION_DEADZONE_Z_DEFAULT;
+    break;
+
+  case MOVEMENT_AXIS_STEALTH_X:
+    paramValues[id] = MOVEMENT_AXIS_STEALTH_X_DEFAULT;
+    break;
+  case MOVEMENT_AXIS_STEALTH_Y:
+    paramValues[id] = MOVEMENT_AXIS_STEALTH_Y_DEFAULT;
+    break;
+  case MOVEMENT_AXIS_STEALTH_Z:
+    paramValues[id] = MOVEMENT_AXIS_STEALTH_Z_DEFAULT;
+    break;
+
+  case MOVEMENT_MOTOR_CURRENT_X:
+    paramValues[id] = MOVEMENT_MOTOR_CURRENT_X_DEFAULT;
+    break;
+  case MOVEMENT_MOTOR_CURRENT_Y:
+    paramValues[id] = MOVEMENT_MOTOR_CURRENT_Y_DEFAULT;
+    break;
+  case MOVEMENT_MOTOR_CURRENT_Z:
+    paramValues[id] = MOVEMENT_MOTOR_CURRENT_Z_DEFAULT;
+    break;
+
+  case MOVEMENT_STALL_SENSITIVITY_X:
+    paramValues[id] = MOVEMENT_STALL_SENSITIVITY_X_DEFAULT;
+    break;
+  case MOVEMENT_STALL_SENSITIVITY_Y:
+    paramValues[id] = MOVEMENT_STALL_SENSITIVITY_Y_DEFAULT;
+    break;
+  case MOVEMENT_STALL_SENSITIVITY_Z:
+    paramValues[id] = MOVEMENT_STALL_SENSITIVITY_Z_DEFAULT;
+    break;
+
+  case MOVEMENT_MICROSTEPS_X:
+    paramValues[id] = MOVEMENT_MICROSTEPS_X_DEFAULT;
+    break;
+  case MOVEMENT_MICROSTEPS_Y:
+    paramValues[id] = MOVEMENT_MICROSTEPS_Y_DEFAULT;
+    break;
+  case MOVEMENT_MICROSTEPS_Z:
+    paramValues[id] = MOVEMENT_MICROSTEPS_Z_DEFAULT;
     break;
 
   case ENCODER_ENABLED_X:
@@ -515,6 +669,13 @@ void ParameterList::loadDefaultValue(int id)
     paramValues[id] = PIN_GUARD_5_ACTIVE_STATE_DEFAULT;
     break;
 
+  case PIN_REPORT_1_PIN_NR:
+    paramValues[id] = PIN_REPORT_1_PIN_NR_DEFAULT;
+    break;
+  case PIN_REPORT_2_PIN_NR:
+    paramValues[id] = PIN_REPORT_1_PIN_NR_DEFAULT;
+    break;
+
   default:
     paramValues[id] = 0;
     break;
@@ -547,6 +708,9 @@ bool ParameterList::validParam(int id)
   case MOVEMENT_INVERT_ENDPOINTS_X:
   case MOVEMENT_INVERT_ENDPOINTS_Y:
   case MOVEMENT_INVERT_ENDPOINTS_Z:
+  case MOVEMENT_INVERT_2_ENDPOINTS_X:
+  case MOVEMENT_INVERT_2_ENDPOINTS_Y:
+  case MOVEMENT_INVERT_2_ENDPOINTS_Z:
   case MOVEMENT_INVERT_MOTOR_X:
   case MOVEMENT_INVERT_MOTOR_Y:
   case MOVEMENT_INVERT_MOTOR_Z:
@@ -555,6 +719,7 @@ bool ParameterList::validParam(int id)
   case MOVEMENT_STEPS_ACC_DEC_X:
   case MOVEMENT_STEPS_ACC_DEC_Y:
   case MOVEMENT_STEPS_ACC_DEC_Z:
+  case MOVEMENT_STEPS_ACC_DEC_Z2:
   case MOVEMENT_STOP_AT_HOME_X:
   case MOVEMENT_STOP_AT_HOME_Y:
   case MOVEMENT_STOP_AT_HOME_Z:
@@ -567,12 +732,23 @@ bool ParameterList::validParam(int id)
   case MOVEMENT_MIN_SPD_X:
   case MOVEMENT_MIN_SPD_Y:
   case MOVEMENT_MIN_SPD_Z:
+  case MOVEMENT_MIN_SPD_Z2:
   case MOVEMENT_HOME_SPEED_X:
   case MOVEMENT_HOME_SPEED_Y:
   case MOVEMENT_HOME_SPEED_Z:
   case MOVEMENT_MAX_SPD_X:
   case MOVEMENT_MAX_SPD_Y:
   case MOVEMENT_MAX_SPD_Z:
+  case MOVEMENT_MAX_SPD_Z2:
+  case MOVEMENT_MOTOR_CURRENT_X:
+  case MOVEMENT_MOTOR_CURRENT_Y:
+  case MOVEMENT_MOTOR_CURRENT_Z:
+  case MOVEMENT_STALL_SENSITIVITY_X:
+  case MOVEMENT_STALL_SENSITIVITY_Y:
+  case MOVEMENT_STALL_SENSITIVITY_Z:
+  case MOVEMENT_MICROSTEPS_X:
+  case MOVEMENT_MICROSTEPS_Y:
+  case MOVEMENT_MICROSTEPS_Z:
   case ENCODER_ENABLED_X:
   case ENCODER_ENABLED_Y:
   case ENCODER_ENABLED_Z:
@@ -600,6 +776,18 @@ bool ParameterList::validParam(int id)
   case MOVEMENT_STOP_AT_MAX_X:
   case MOVEMENT_STOP_AT_MAX_Y:
   case MOVEMENT_STOP_AT_MAX_Z:
+  case MOVEMENT_CALIBRATION_RETRY_X:
+  case MOVEMENT_CALIBRATION_RETRY_Y:
+  case MOVEMENT_CALIBRATION_RETRY_Z:
+  case MOVEMENT_CALIBRATION_RETRY_TOTAL_X:
+  case MOVEMENT_CALIBRATION_RETRY_TOTAL_Y:
+  case MOVEMENT_CALIBRATION_RETRY_TOTAL_Z:
+  case MOVEMENT_AXIS_STEALTH_X:
+  case MOVEMENT_AXIS_STEALTH_Y:
+  case MOVEMENT_AXIS_STEALTH_Z:
+  case MOVEMENT_CALIBRATION_DEADZONE_X:
+  case MOVEMENT_CALIBRATION_DEADZONE_Y:
+  case MOVEMENT_CALIBRATION_DEADZONE_Z:
   case PIN_GUARD_1_PIN_NR:
   case PIN_GUARD_1_TIME_OUT:
   case PIN_GUARD_1_ACTIVE_STATE:
@@ -615,6 +803,8 @@ bool ParameterList::validParam(int id)
   case PIN_GUARD_5_PIN_NR:
   case PIN_GUARD_5_TIME_OUT:
   case PIN_GUARD_5_ACTIVE_STATE:
+  case PIN_REPORT_1_PIN_NR:
+  case PIN_REPORT_2_PIN_NR:
     return true;
   default:
     return false;

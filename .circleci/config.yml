@@ -1,0 +1,79 @@
+version: 2.1
+
+jobs:
+  build:
+    machine: true
+    parameters:
+      arduino_version:
+        description: "Arduino version"
+        default: "1.8.19"
+        type: string
+    steps:
+      - checkout
+      - restore_cache:
+          keys:
+            - arduino-<< parameters.arduino_version >>
+      - run:
+          name: Install Arduino
+          command: |
+            if [ ! -d "$HOME/arduino-<< parameters.arduino_version >>" ]
+            then
+              wget https://downloads.arduino.cc/arduino-<< parameters.arduino_version >>-linux64.tar.xz
+              tar xf arduino-<< parameters.arduino_version >>-linux64.tar.xz -C $HOME
+            fi
+      - save_cache:
+          key: arduino-<< parameters.arduino_version >>
+          paths:
+            - ~/arduino-<< parameters.arduino_version >>
+      - run:
+          name: Create bin directory
+          command: mkdir -p bin
+      - run:
+          name: Compile Genesis v1.2 (RAMPS_V14)
+          command: make dep_core dep_Servo dep_SPI dep_EEPROM target_ramps_v14 remove_temp
+          when: always
+      - run:
+          name: Compile Genesis v1.3 (FARMDUINO_V10)
+          command: make dep_core dep_Servo dep_SPI dep_EEPROM target_farmduino_v10 remove_temp
+          when: always
+      - run:
+          name: Compile Genesis v1.4 (FARMDUINO_V14)
+          command: make dep_core dep_Servo dep_SPI dep_EEPROM target_farmduino_k14 remove_temp
+          when: always
+      - run:
+          name: Compile Genesis v1.5 (FARMDUINO_V30)
+          command: make dep_core dep_Servo dep_SPI dep_EEPROM target_farmduino_k15 remove_temp
+          when: always
+      - run:
+          name: Compile Genesis v1.6 (FARMDUINO_V32)
+          command: make dep_core dep_Servo dep_SPI dep_EEPROM target_farmduino_k16 remove_temp
+          when: always
+      - run:
+          name: Compile Express v1.0 (FARMDUINO_EXP_V20)
+          command: make dep_core dep_Servo dep_SPI dep_EEPROM target_express_k10 remove_temp
+          when: always
+      - run:
+          name: Compile Express v1.1 (FARMDUINO_EXP_V22)
+          command: make dep_core dep_Servo dep_SPI dep_EEPROM target_express_k11 remove_temp
+          when: always
+      - run:
+          name: Compile all
+          command: |
+            make force_clean
+            make
+      - run:
+          name: Check strings
+          command: make strings_test
+      - run:
+          name: Check software version
+          command: |
+            export SOFTWARE_VERSION=$(cat src/Config.h | grep -w SOFTWARE_VERSION | cut -d'"' -f 2 | cut -d'\' -f 1)
+            strings bin/arduino_firmware.hex.bin | grep $SOFTWARE_VERSION
+            export SHORT_COMMIT_SHA=$(echo $CIRCLE_SHA1 | cut -c1-8)
+            export COMMIT_SUFFIX=$(strings bin/arduino_firmware.hex.bin | grep $SHORT_COMMIT_SHA)
+            export NEW_FW_DIR=bin/$SOFTWARE_VERSION$COMMIT_SUFFIX
+            mkdir $NEW_FW_DIR
+            rm bin/*.bin
+            mv bin/*.hex $NEW_FW_DIR
+      - store_artifacts:
+          path: bin

@@ -29,6 +29,7 @@ Command::Command(char *commandChar)
   else
   {
     invalidCommand = true;
+    commandCodeEnum = CODE_UNDEFINED;
     return;
   }
 
@@ -51,6 +52,11 @@ CommandCodeEnum Command::getGCodeEnum(char *code)
   {
     return G01;
   }
+    if (strcmp(code, "G28") == 0)
+  {
+    return G28;
+  }
+
   //if (strcmp(code, "F3") == 0 || strcmp(code, "F03") == 0) {
   //	return F03;
   //}
@@ -261,8 +267,17 @@ void Command::print()
   Serial.print(element);
   Serial.print(", M: ");
   Serial.print(mode);
+
+  Serial.print(", A: ");
+  Serial.print(axisSpeedValue[0]);
+  Serial.print(", B: ");
+  Serial.print(axisSpeedValue[1]);
+  Serial.print(", C: ");
+  Serial.print(axisSpeedValue[2]);
+
   Serial.print(", Q: ");
   Serial.print(msgQueue);
+
   Serial.print("\r\n");
 }
 
